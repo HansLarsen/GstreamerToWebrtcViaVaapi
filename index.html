@@ -1,18 +1,101 @@
+<!DOCTYPE html>
 <html>
 
 <head>
-    <title>Button Example</title>
+    <title>WebSocket Button Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #007cba;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #005a87;
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
 </head>
 
 <body>
-    <button onclick="handleClick()">Click Me</button>
+    <div style="text-align: center;">
+        <button onclick="handleClick()">Click Me (WebSocket)</button>
+        <div id="status" class="disconnected">Disconnected from server</div>
+    </div>
+
     <script>
-        function handleClick() {
-            fetch('/clicked', { method: 'POST' })
-                .then(response => response.text())
-                .then(data => console.log(data));
-            alert('Button clicked! Check server console.');
+        let websocket = null;
+        const statusDiv = document.getElementById('status');
+
+        function connectWebSocket() {
+            websocket = new WebSocket('ws://localhost:8765');
+
+            websocket.onopen = function (event) {
+                console.log('WebSocket connected');
+                statusDiv.textContent = 'Connected to server';
+                statusDiv.className = 'connected';
+            };
+
+            websocket.onclose = function (event) {
+                console.log('WebSocket disconnected');
+                statusDiv.textContent = 'Disconnected from server';
+                statusDiv.className = 'disconnected';
+                // Try to reconnect after 2 seconds
+                setTimeout(connectWebSocket, 2000);
+            };
+
+            websocket.onerror = function (error) {
+                console.error('WebSocket error:', error);
+                statusDiv.textContent = 'Connection error';
+                statusDiv.className = 'disconnected';
+            };
+
+            websocket.onmessage = function (event) {
+                console.log('Message from server:', event.data);
+            };
         }
+
+        function handleClick() {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.send('button_clicked');
+                alert('Button clicked! Message sent via WebSocket.');
+            } else {
+                alert('WebSocket not connected. Please wait for connection.');
+            }
+        }
+
+        // Initialize WebSocket connection when page loads
+        window.addEventListener('load', connectWebSocket);
     </script>
 </body>
 
