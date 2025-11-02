@@ -1,59 +1,18 @@
 import asyncio
 import websockets
 import threading
-import cv2
 import json
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import pathlib
-from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
-from aiortc.contrib.media import MediaPlayer
-from av import VideoFrame
-import fractions
-from library.camera import Camera
+from aiortc import RTCPeerConnection, RTCSessionDescription
 import os
-from aiortc import RTCIceCandidate
+from library.custom_video_track import CustomVideoStreamTrack
 
 ROOT = os.path.dirname(__file__)
 
 # WebRTC configuration
 pcs = set()  # Set to track peer connections
-camera_capture = Camera()
-
-class CustomVideoStreamTrack(VideoStreamTrack):
-    """
-    A custom video track that captures frames from an OpenCV webcam.
-    """
-    def __init__(self, camera_id=0):
-        global camera_capture
-        super().__init__()
-
-        print("Webcam initialized")
-
-        if not camera_capture.is_opened():
-            raise RuntimeError("Error: Could not open camera.")
-
-    async def recv(self):
-        """
-        This method is called to get the next video frame.
-        """
-        global camera_capture
-        frame = camera_capture.get_frame()
-        if frame is None:
-            raise RuntimeError("Error: Could not read frame.")
-        
-        # Convert the OpenCV frame (BGR) to a format aiortc can use (RGB)
-        video_frame = VideoFrame.from_ndarray(frame, format='rgb24')
-        video_frame.pts = camera_capture.get_frame_count()
-        video_frame.time_base = fractions.Fraction(1, 30)  # Use fractions for time_base
-
-        return video_frame
-    
-    def start(self):
-        print("Starting video stream track")
-
-    def stop(self):
-        print("Stopping video stream track")
-        camera_capture.release()
+framecount = 0
 
 async def handle_websocket(websocket, path):
     print("Client connected")
@@ -62,8 +21,9 @@ async def handle_websocket(websocket, path):
     pc = RTCPeerConnection()
     pcs.add(pc)
     
-    # Add the video track to the connection
     video_track = CustomVideoStreamTrack()
+
+    # Add the video track to the connection
     pc.addTransceiver(video_track, direction="sendonly")
 
     for transceiver in pc.getTransceivers():
@@ -89,8 +49,6 @@ async def handle_websocket(websocket, path):
                 data = json.loads(message)
                 
                 if data["type"] == "offer":
-
-                    print("Received SDP Offer:", data["sdp"])
                     # Set the remote description and create answer
                     offset_sdp = RTCSessionDescription(sdp=data["sdp"], type=data["type"])
                     await pc.setRemoteDescription(
@@ -99,7 +57,6 @@ async def handle_websocket(websocket, path):
                     
                     # Create and set local description
                     answer = await pc.createAnswer()
-                    print("Sending sdp awnser: ", answer.sdp)
                     await pc.setLocalDescription(answer)
                     
                     # Send the answer back to the client

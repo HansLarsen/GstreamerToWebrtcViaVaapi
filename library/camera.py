@@ -1,32 +1,54 @@
 import cv2
+import threading
+import time
 
 class Camera:
-    def __init__(self, camera_index=0):
-        self.cap = cv2.VideoCapture(camera_index)
-        self.frame_count = 0
+    _framecount = 0
+    _frame = None
+    _cap = None
+    _running = False
+    _thread = None
 
-        self.cap.set(cv2.CAP_PROP_FPS, 30)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        # Try to reduce buffering for lower latency
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    def __init__(self):
+        pipeline = (
+            "v4l2src device=/dev/video0 ! video/x-raw,framerate=30/1,width=640,height=480 ! "
+            "videoconvert ! appsink sync=false max-lateness=10000000"
+        )
+        self._cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        self._frame = None
+        self._running = True
+
+        self._cap.set(cv2.CAP_PROP_FPS, 30)
+        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self._cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # Manual mode
+        self._cap.set(cv2.CAP_PROP_AUTO_WB, 0)          # Disable auto white balance
+
+        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self._thread.start()
+
+    def _capture_loop(self):
+        while self._running:
+            ret, frame = self._cap.read()
+            if ret:
+                self._framecount += 1
+                self._frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            else:
+                print("Warning: Could not read frame from camera.")
 
     def get_frame(self):
-        ret, frame = self.cap.read()
-        self.frame_count += 1
-        if not ret:
-            return None
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return rgb
+        return self._frame
+    
+    def get_framecount(self):
+        return self._framecount
 
     def release(self):
-        self.cap.release()
+        self._running = False
+        self._thread.join()
+        self._cap.release()
 
     def is_opened(self):
-        return self.cap.isOpened()
-    
-    def get_frame_count(self):
-        return self.frame_count
+        return self._cap.isOpened()
         
 if __name__ == "__main__":
     camera = Camera()
