@@ -2,35 +2,31 @@
 <html>
 
 <head>
-    <title>WebSocket Button Example</title>
+    <title>WebRTC Webcam Stream</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
+            padding: 20px;
+        }
+
+        video {
+            max-width: 100%;
+            border: 2px solid #333;
+            border-radius: 8px;
         }
 
         button {
-            padding: 15px 30px;
-            font-size: 18px;
-            background-color: #007cba;
-            color: white;
-            border: none;
-            border-radius: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px;
             cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        button:hover {
-            background-color: #005a87;
         }
 
         #status {
-            margin-top: 20px;
+            margin: 10px;
             padding: 10px;
             border-radius: 5px;
         }
@@ -48,27 +44,40 @@
 </head>
 
 <body>
-    <div style="text-align: center;">
-        <button onclick="handleClick()">Click Me (WebSocket)</button>
-        <div id="status" class="disconnected">Disconnected from server</div>
-    </div>
+    <h1>WebRTC Webcam Stream</h1>
+    <button onclick="handleClick()">Click Me</button>
+    <div id="status" class="disconnected">Disconnected</div>
+    <video id="videoElement" autoplay playsinline muted></video>
 
     <script>
         let websocket = null;
+        let peerConnection = null;
+        const videoElement = document.getElementById('videoElement');
         const statusDiv = document.getElementById('status');
 
+        // WebRTC configuration
+        const configuration = {
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }, { urls: "stun:stun2.l.google.com:19302" }
+            ]
+        };
+
         function connectWebSocket() {
-            websocket = new WebSocket('ws://localhost:8765');
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.hostname}:8765`;
+
+            websocket = new WebSocket(wsUrl);
 
             websocket.onopen = function (event) {
                 console.log('WebSocket connected');
-                statusDiv.textContent = 'Connected to server';
+                statusDiv.textContent = 'Connected - Starting WebRTC...';
                 statusDiv.className = 'connected';
+                startWebRTC();
             };
 
             websocket.onclose = function (event) {
                 console.log('WebSocket disconnected');
-                statusDiv.textContent = 'Disconnected from server';
+                statusDiv.textContent = 'Disconnected';
                 statusDiv.className = 'disconnected';
                 // Try to reconnect after 2 seconds
                 setTimeout(connectWebSocket, 2000);
@@ -80,21 +89,64 @@
                 statusDiv.className = 'disconnected';
             };
 
-            websocket.onmessage = function (event) {
-                console.log('Message from server:', event.data);
+            websocket.onmessage = async function (event) {
+                const message = event.data;
+
+                if (message === "button_clicked") {
+                    console.log('Button click acknowledged');
+                    return;
+                }
+
+                // Handle WebRTC signaling messages
+                const data = JSON.parse(message);
+
+                if (data.type === 'answer') {
+                    await peerConnection.setRemoteDescription(data);
+                } else if (data.type === 'ice-candidate') {
+                    await peerConnection.addIceCandidate(data.candidate);
+                }
             };
+        }
+
+        async function startWebRTC() {
+            try {
+                peerConnection = new RTCPeerConnection(configuration);
+
+                // Handle incoming video stream
+                peerConnection.ontrack = (event) => {
+                    console.log('Received video track');
+                    videoElement.srcObject = event.streams[0];
+                    statusDiv.textContent = 'Connected - Streaming Video';
+                };
+
+                // Add transceiver for receiving video
+                peerConnection.addTransceiver('video', { direction: 'recvonly' });
+
+                // Create and send offer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                websocket.send(JSON.stringify({
+                    type: 'offer',
+                    sdp: offer.sdp
+                }));
+
+            } catch (error) {
+                console.error('WebRTC error:', error);
+                statusDiv.textContent = 'WebRTC error: ' + error.message;
+                statusDiv.className = 'disconnected';
+            }
         }
 
         function handleClick() {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 websocket.send('button_clicked');
-                alert('Button clicked! Message sent via WebSocket.');
             } else {
-                alert('WebSocket not connected. Please wait for connection.');
+                alert('Not connected to server');
             }
         }
 
-        // Initialize WebSocket connection when page loads
+        // Initialize connection when page loads
         window.addEventListener('load', connectWebSocket);
     </script>
 </body>
