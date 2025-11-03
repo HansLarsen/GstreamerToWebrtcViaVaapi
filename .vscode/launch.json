@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "firefox",
+            "request": "launch",
+            "reAttach": true,
+            "name": "Launch localhost",
+            "url": "http://192.168.1.206:8000",
+            "webRoot": "${workspaceFolder}"
+        },
+        {
             "name": "Python Debugger: Main Project",
             "type": "debugpy",
             "request": "launch",

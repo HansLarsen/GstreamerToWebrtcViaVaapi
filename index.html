@@ -2,105 +2,166 @@
 <html>
 
 <head>
-    <title>Video Stream</title>
+    <title>WebRTC Camera Stream</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
+            margin: 20px;
         }
 
         video {
+            border: 1px solid #ccc;
             max-width: 100%;
-            border: 2px solid #333;
-            border-radius: 8px;
         }
 
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            margin: 10px;
-            cursor: pointer;
-        }
-
-        #status {
-            margin: 10px;
+        .status {
+            margin: 10px 0;
             padding: 10px;
             border-radius: 5px;
         }
 
         .connected {
-            background-color: #d4edda;
+            background: #d4edda;
             color: #155724;
         }
 
         .disconnected {
-            background-color: #f8d7da;
+            background: #f8d7da;
             color: #721c24;
         }
     </style>
 </head>
 
 <body>
-    <h1>Video Stream</h1>
-    <button onclick="handleClick()">Click Me</button>
-    <div id="status" class="disconnected">Disconnected</div>
-    <video id="videoElement" autoplay playsinline muted></video>
+    <h1>WebRTC Camera Stream</h1>
+    <div id="status" class="status disconnected">Disconnected</div>
+    <video id="video" autoplay playsinline controls muted></video>
 
     <script>
-        let websocket = null;
-        let peerConnection = null;
-        const videoElement = document.getElementById('videoElement');
+        const video = document.getElementById('video');
         const statusDiv = document.getElementById('status');
+        let pc = null;
+        let ws = null;
 
-        function connectWebSocket() {
+        function updateStatus(message, isConnected) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${isConnected ? 'connected' : 'disconnected'}`;
+        }
+
+        function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.hostname}:8000/ws`;
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
 
-            websocket = new WebSocket(wsUrl);
+            ws = new WebSocket(wsUrl);
+            updateStatus('Connecting...', false);
 
-            websocket.onopen = function (event) {
+            ws.onopen = () => {
                 console.log('WebSocket connected');
-                statusDiv.textContent = 'Connected - Starting';
-                statusDiv.className = 'connected';
+                updateStatus('Connected - Starting WebRTC...', true);
+                startWebRTC();
             };
 
-            websocket.onclose = function (event) {
+            ws.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+                console.log('Received:', data.type);
+
+                if (data.type === 'sdp-offer') {
+                    await handleOffer(data.sdp);
+                } else if (data.type === 'ice-candidate') {
+                    await handleIceCandidate(data);
+                }
+            };
+
+            ws.onclose = () => {
                 console.log('WebSocket disconnected');
-                statusDiv.textContent = 'Disconnected';
-                statusDiv.className = 'disconnected';
-                // Try to reconnect after 2 seconds
-                setTimeout(connectWebSocket, 2000);
+                updateStatus('Disconnected - Attempting to reconnect...', false);
+                if (pc) {
+                    pc.close();
+                    pc = null;
+                }
+                setTimeout(connect, 2000);
             };
 
-            websocket.onerror = function (error) {
+            ws.onerror = (error) => {
                 console.error('WebSocket error:', error);
-                statusDiv.textContent = 'Connection error';
-                statusDiv.className = 'disconnected';
+                updateStatus('Connection error', false);
+            };
+        }
+
+        async function startWebRTC() {
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            });
+
+            pc.ontrack = (event) => {
+                console.log('Received WebRTC track');
+                video.srcObject = event.streams[0];
+                updateStatus('Connected - Streaming', true);
             };
 
-            websocket.onmessage = async function (event) {
-                const message = event.data;
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate.candidate,
+                        sdpMLineIndex: event.candidate.sdpMLineIndex
+                    }));
+                }
+            };
 
-                if (message === "button_clicked") {
-                    console.log('Button click acknowledged');
-                    return;
+            pc.onconnectionstatechange = () => {
+                console.log('Connection state:', pc.connectionState);
+                if (pc.connectionState === 'connected') {
+                    updateStatus('Connected - Streaming', true);
                 }
             };
         }
 
-        function handleClick() {
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send('button_clicked');
-            } else {
-                alert('Not connected to server');
+        async function handleOffer(offerSdp) {
+            if (!pc) {
+                console.error('No PeerConnection available');
+                return;
+            }
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: 'offer',
+                    sdp: offerSdp
+                }));
+
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                let awnser_text = answer.sdp
+
+                ws.send(JSON.stringify({
+                    type: 'sdp-answer',
+                    sdp: awnser_text
+                }));
+
+                console.log('Sent SDP answer');
+            } catch (error) {
+                console.error('Error handling offer:', error);
             }
         }
 
-        // Initialize connection when page loads
-        window.addEventListener('load', connectWebSocket);
+        async function handleIceCandidate(data) {
+            if (!pc) return;
+
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate({
+                    candidate: data.candidate,
+                    sdpMLineIndex: data.sdpMLineIndex
+                }));
+            } catch (error) {
+                console.error('Error adding ICE candidate:', error);
+            }
+        }
+
+        // Start connection when page loads
+        connect();
     </script>
 </body>
 
