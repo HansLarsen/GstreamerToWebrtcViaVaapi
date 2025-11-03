@@ -92,7 +92,20 @@
             pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' }
-                ]
+                ],
+                // Add these for lower latency
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require'
+            });
+
+            // Low latency video settings
+            const transceiver = pc.addTransceiver('video', {
+                direction: 'recvonly',
+                streams: [],
+                sendEncodings: [{
+                    priority: 'high',
+                    networkPriority: 'high'
+                }]
             });
 
             pc.ontrack = (event) => {

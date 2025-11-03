@@ -8,7 +8,6 @@ import json
 import asyncio
 import logging
 import os
-os.environ["GST_DEBUG"] = "webrtcbin:6"
 
 class GStreamerCamera:
     def __init__(self):
@@ -53,6 +52,24 @@ class GStreamerCamera:
         # Start the pipeline
         self.pipeline.set_state(Gst.State.PLAYING)
         print("GStreamer pipeline created and playing.")
+        self.add_latency_probes()
+
+    def add_latency_probes(self):
+        # Add probe to measure buffer timestamps
+        def on_buffer_probe(pad, info):
+            buffer = info.get_buffer()
+            if buffer:
+                timestamp = buffer.pts
+                current_time = Gst.util_get_timestamp()
+                latency = (current_time - timestamp) / Gst.MSECOND
+                print(f"Pipeline latency: {latency:.2f}ms")
+            return Gst.PadProbeReturn.OK
+        
+        # Add probe to the vp8enc element
+        vp8enc = self.pipeline.get_by_name("vp8enc")
+        if vp8enc:
+            sinkpad = vp8enc.get_static_pad("sink")
+            sinkpad.add_probe(Gst.PadProbeType.BUFFER, on_buffer_probe)
 
     def on_connection_state_change(self, webrtcbin, pspec):
         state = webrtcbin.get_property("connection-state")
