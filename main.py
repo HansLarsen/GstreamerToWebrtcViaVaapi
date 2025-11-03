@@ -1,39 +1,69 @@
 import asyncio
-import websockets
-from http.server import HTTPServer
-from library.HTTP_Server import MyHTTPHandler
 from library.GStreamer_Camera import GStreamerCamera
 import json
+import aiohttp
+from aiohttp import web, WSCloseCode
+import asyncio
+import pathlib
 
-pcs = set()  # Set to track peer connections
-camera = GStreamerCamera()
 
-async def handle_websocket(websocket, path):
-    # print("Client connected")
-    await websocket.send("Successfully registered")
+class WebServer:
+    _camera = None
+    _app = None
+    _app_runner = None
+    _websockets = set()
 
-def start_websocket_server():
-    """Start WebSocket server in a separate thread"""
-    PORT = 8765
-    start_server = websockets.serve(handle_websocket, "0.0.0.0", PORT)  # Use 0.0.0.0 to allow external connections
-    asyncio.get_event_loop().run_until_complete(start_server)
-    print(f"WebSocket server running on ws://0.0.0.0:{PORT}")
+    def __init__(self):
+        self._app = web.Application()
+        self._camera = GStreamerCamera()
+        self._camera.create_pipeline()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-def start_http_server():
-    """Start HTTP server"""
-    PORT = 8000
-    httpd = HTTPServer(("0.0.0.0", PORT), MyHTTPHandler)  # Use 0.0.0.0 to allow external connections
-    httpd.allow_reuse_address = True
-    print(f"HTTP server running at http://0.0.0.0:{PORT}")
-    asyncio.get_event_loop().run_in_executor(None, httpd.serve_forever)
+        asyncio.get_event_loop().run_in_executor(None, self._camera.get_loop().run)
+
+        html_file = pathlib.Path(__file__).parent / 'index.html'
+        with open(html_file, 'r') as f:
+            self.html = f.read()
+
+        self._app.router.add_get('/', self.server_http)
+        self._app.router.add_get('/ws', self.handle_websocket)
+
+        self._app_runner = web.AppRunner(self._app)
+        asyncio.get_event_loop().create_task(self.start())
+
+    async def start(self):
+        await self._app_runner.setup()
+        site = web.TCPSite(self._app_runner, '0.0.0.0', 8000)
+        await site.start()
+        print("HTTP server started at http://")
+
+    async def server_http(self, request):
+        return web.Response(text=self.html, content_type='text/html')
+    
+    async def handle_websocket(self, request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        
+        try:
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = json.loads(msg.data)
+                    # Handle incoming messages if needed
+        except Exception as e:
+            print(f"WebSocket error: {e}")
+        finally:
+            await ws.close()
+        
+        return ws
+
+    def server_loop(self):
+        asyncio.get_event_loop().run_forever()
 
 if __name__ == "__main__":    
     # Start HTTP server in the main thread
-    camera.create_pipeline()
     try:
-        start_websocket_server()
-        start_http_server()
-        asyncio.get_event_loop().run_until_complete(camera.get_loop().run())
-        asyncio.get_event_loop().run_forever()
+        web_server = WebServer()
+        web_server.server_loop()
     except KeyboardInterrupt:
         print("\nServers stopped")
