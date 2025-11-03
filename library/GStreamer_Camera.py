@@ -32,8 +32,9 @@ class GStreamerCamera:
     def create_pipeline(self, device="/dev/video0"):
         pipeline_str = (
             f"v4l2src device={device} ! "
-            "video/x-raw,width=640,height=480,framerate=30/1 ! "  # Raw video instead of JPEG
+            "video/x-raw,width=640,height=480,framerate=30/1 ! "  # Lower resolution
             "videoconvert ! "
+            "queue max-size-buffers=1 ! "
             "vp8enc deadline=1 cpu-used=4 target-bitrate=2000000 ! "
             "rtpvp8pay ! "
             "application/x-rtp,media=video,encoding-name=VP8,payload=96 ! "
