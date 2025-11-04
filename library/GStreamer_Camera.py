@@ -136,7 +136,6 @@ class GStreamerCamera:
     
     async def handle_client_message(self, ws, data):
         message_type = data.get('type')
-        print(f"Received message from client: {message_type}")
         
         if message_type == 'sdp-answer':
             # Client sent SDP answer

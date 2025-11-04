@@ -5,12 +5,20 @@ import aiohttp
 from aiohttp import web, WSCloseCode
 import asyncio
 import pathlib
+import paho.mqtt.client as mqtt
+import threading
+import time
 
 class WebServer:
     _camera = None
     _app = None
     _app_runner = None
     _websockets = set()
+    _mqtt_client = None
+    _update_thread = None
+    _forward = 0.0
+    _turn = 0.0
+    _last_time = time.time()
 
     def __init__(self):
         self._app = web.Application()
@@ -36,6 +44,25 @@ class WebServer:
         self._app_runner = web.AppRunner(self._app)
         asyncio.get_event_loop().create_task(self.start())
 
+        self._mqtt_client = mqtt.Client()
+        self._mqtt_client.connect("10.46.28.3", 1883, 60)
+        self._mqtt_client.loop_start()
+
+        self._update_thread = threading.Thread(target=self.update_controls_thread)
+        self._update_thread.daemon = True
+        self._update_thread.start()
+
+    def update_controls_thread(self):
+        while True:
+            if self._last_time - time.time() > 0.2:
+                self._forward = 0.0
+                self._turn = 0.0
+
+            control_msg = {"forward": self._forward, "turn": self._turn}
+            self._mqtt_client.publish("/capra/robot/remote/robot/control", json.dumps(control_msg))
+            time.sleep(0.05)
+        
+
     async def start(self):
         await self._app_runner.setup()
         site = web.TCPSite(self._app_runner, '0.0.0.0', 8000)
@@ -60,8 +87,21 @@ class WebServer:
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     data = json.loads(msg.data)
-                    # Forward message to camera for processing
-                    await self._camera.handle_client_message(ws, data)
+                    print(f"Received message from client: {type(data.get('type'))}")
+
+                    if data.get('type') == 'gamepad-input':
+                        if data.get('input') == 'speed':
+                        # Handle control message
+                            forward = data.get('speed', 0.0)
+                            self._forward = forward
+                        elif data.get('input') == 'turn':
+                            turn = data.get('turn', 0.0)
+                            self._turn = turn
+
+                        self._last_time = time.time()
+                    else:
+                        # Forward message to camera for processing
+                        await self._camera.handle_client_message(ws, data)
                     
         except Exception as e:
             print(f"WebSocket error: {e}")
