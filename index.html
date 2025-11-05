@@ -68,6 +68,17 @@
     <div id="status" class="status disconnected">Disconnected</div>
     <video id="video" autoplay playsinline controls muted></video>
 
+    <div>
+        <label>Map speed -1 and 1 to 0 and 1: </label>
+        <input type="checkbox" id="speed-map" name="speed map" />
+    </div>
+    <select id="reverse-button">
+        <option value="0">Button 0</option>
+        <option value="1">Button 1</option>
+        <option value="2">Button 2</option>
+        <option value="3">Button 3</option>
+    </select>
+
     <div id="controls-menu">
         <h2>Control Bindings</h2>
         <label for="speed-axis">Speed Axis:</label>
@@ -77,6 +88,8 @@
             <option value="2">Axis 2</option>
             <option value="3">Axis 3</option>
         </select>
+        <label for="speed-invert">Invert Speed Axis:</label>
+        <input type="checkbox" id="speed-invert" name="speed invert" checked />
 
         <label for="turn-axis">Turn Axis:</label>
         <select id="turn-axis">
@@ -85,6 +98,8 @@
             <option value="2">Axis 2</option>
             <option value="3">Axis 3</option>
         </select>
+        <label for="turn-invert">Invert Turn Axis:</label>
+        <input type="checkbox" id="turn-invert" name="turn invert" checked />
     </div>
 
     <div id="axis-visualization">
@@ -263,6 +278,10 @@
         window.addEventListener('load', () => {
             const savedSpeedAxis = localStorage.getItem('speedAxis');
             const savedTurnAxis = localStorage.getItem('turnAxis');
+            const invertedSpeedAxis = document.getElementById('invertedSpeedAxis');
+            const invertedTurnAxis = document.getElementById('invertedTurnAxis');
+            const reverseButton = document.getElementById('reverseButton');
+            const mappedSpeed = localStorage.getItem('mappedSpeed');
 
             if (savedSpeedAxis !== null) {
                 speedAxis = parseInt(savedSpeedAxis);
@@ -274,6 +293,25 @@
                 turnAxis = parseInt(savedTurnAxis);
                 document.getElementById('turn-axis').value = savedTurnAxis;
                 console.log(`Loaded saved turn axis: ${turnAxis}`);
+            }
+
+            if (invertedSpeedAxis !== null) {
+                invertedSpeedAxis.checked = localStorage.getItem('invertedSpeedAxis') === 'true';
+            }
+
+            if (invertedTurnAxis !== null) {
+                invertedTurnAxis.checked = localStorage.getItem('invertedTurnAxis') === 'true';
+            }
+
+            if (reverseButton !== null) {
+                const savedReverseButton = localStorage.getItem('reverseButton');
+                if (savedReverseButton !== null) {
+                    reverseButton.value = savedReverseButton;
+                }
+            }
+
+            if (mappedSpeed !== null) {
+                document.getElementById('speed-map').checked = mappedSpeed === 'true';
             }
         });
 
@@ -288,6 +326,26 @@
             turnAxis = parseInt(event.target.value);
             localStorage.setItem('turnAxis', turnAxis);
             console.log(`Turn axis set to: ${turnAxis} and saved to localStorage`);
+        });
+
+        document.getElementById('speed-invert').addEventListener('change', (event) => {
+            localStorage.setItem('invertedSpeedAxis', event.target.checked);
+            console.log(`Inverted speed axis set to: ${event.target.checked} and saved to localStorage`);
+        });
+
+        document.getElementById('turn-invert').addEventListener('change', (event) => {
+            localStorage.setItem('invertedTurnAxis', event.target.checked);
+            console.log(`Inverted turn axis set to: ${event.target.checked} and saved to localStorage`);
+        });
+
+        document.getElementById('reverse-button').addEventListener('change', (event) => {
+            localStorage.setItem('reverseButton', event.target.value);
+            console.log(`Reverse button set to: ${event.target.value} and saved to localStorage`);
+        });
+
+        document.getElementById('speed-map').addEventListener('change', (event) => {
+            localStorage.setItem('mappedSpeed', event.target.checked);
+            console.log(`Mapped speed set to: ${event.target.checked} and saved to localStorage`);
         });
 
         function updateBarGraph(axisValue, barFillElement) {
@@ -314,8 +372,21 @@
                     }
 
                     // Handle speed axis
-                    const speedValue = gamepad.axes[speedAxis];
-                    if (Math.abs(speedValue) > 0.05) {
+                    let speedValue = gamepad.axes[speedAxis];
+                    if (Math.abs(speedValue) > 0.001) {
+                        if (document.getElementById('speed-invert').checked) {
+                            speedValue = -speedValue;
+                        }
+                        if (document.getElementById('speed-map').checked) {
+                            // Map -1 to 1 range to 0 to 1 range
+                            speedValue = (speedValue + 1) / 2;
+                        }
+                        if (document.getElementById('reverse-button').value) {
+                            const reverseButtonIndex = parseInt(document.getElementById('reverse-button').value);
+                            if (gamepad.buttons[reverseButtonIndex].pressed) {
+                                speedValue = -speedValue;
+                            }
+                        }
                         console.log(`Speed axis value: ${speedValue}`);
                         updateBarGraph(speedValue, document.getElementById('speed-bar-fill'));
                         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -324,8 +395,11 @@
                     }
 
                     // Handle turn axis
-                    const turnValue = gamepad.axes[turnAxis];
-                    if (Math.abs(turnValue) > 0.05) {
+                    let turnValue = gamepad.axes[turnAxis];
+                    if (Math.abs(turnValue) > 0.001) {
+                        if (document.getElementById('turn-invert').checked) {
+                            turnValue = -turnValue;
+                        }
                         console.log(`Turn axis value: ${turnValue}`);
                         updateBarGraph(turnValue, document.getElementById('turn-bar-fill'));
                         if (ws && ws.readyState === WebSocket.OPEN) {
