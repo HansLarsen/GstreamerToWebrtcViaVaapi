@@ -34,7 +34,7 @@ class GStreamerCamera:
             "video/x-raw,width=640,height=480,framerate=30/1 ! "  # Lower resolution
             "videoconvert ! "
             "queue max-size-buffers=1 ! "
-            "vp8enc deadline=1 cpu-used=4 target-bitrate=2000000 ! "
+            "vp8enc deadline=1 cpu-used=4 target-bitrate=800000 cq-level=28 ! "
             "rtpvp8pay ! "
             "application/x-rtp,media=video,encoding-name=VP8,payload=96 ! "
             "webrtcbin name=webrtcbin latency=0 bundle-policy=max-bundle stun-server=stun://stun.l.google.com:19302"
