@@ -176,9 +176,7 @@
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' }
                 ],
-                // Add these for lower latency
-                bundlePolicy: 'max-bundle',
-                rtcpMuxPolicy: 'require'
+                iceTransportPolicy: "all"
             });
 
             // Low latency video settings
@@ -408,6 +406,7 @@
                     }
                 }
             }
+
             // Continue the loop
             requestAnimationFrame(checkGamepads);
         }
