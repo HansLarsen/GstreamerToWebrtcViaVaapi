@@ -319,19 +319,7 @@
                     <h3>MQTT Configuration</h3>
                     <div class="form-group">
                         <label for="mqtt-broker">Broker URL:</label>
-                        <input type="text" id="mqtt-broker" placeholder="mqtt://broker.example.com:1883">
-                    </div>
-                    <div class="form-group">
-                        <label for="mqtt-username">Username:</label>
-                        <input type="text" id="mqtt-username" placeholder="Optional">
-                    </div>
-                    <div class="form-group">
-                        <label for="mqtt-password">Password:</label>
-                        <input type="password" id="mqtt-password" placeholder="Optional">
-                    </div>
-                    <div class="form-group">
-                        <label for="mqtt-client-id">Client ID:</label>
-                        <input type="text" id="mqtt-client-id" placeholder="robot-controller-web">
+                        <input type="text" id="mqtt-broker" placeholder="10.46.28.3">
                     </div>
                     <div class="form-group">
                         <label for="mqtt-topic">Control Topic:</label>
@@ -397,6 +385,12 @@
             document.getElementById(`${viewName}-tab`).classList.add('active');
         }
 
+        // Settings page functionality
+        document.getElementById('video-device').addEventListener('change', function() {
+            const customDeviceGroup = document.getElementById('custom-device-group');
+            customDeviceGroup.style.display = this.value === 'custom' ? 'block' : 'none';
+        });
+
         // Load settings from localStorage
         window.addEventListener('load', () => {
             loadMQTTSettings();
@@ -409,12 +403,8 @@
             const mqttPassword = localStorage.getItem('mqttPassword');
             const mqttClientId = localStorage.getItem('mqttClientId');
             const mqttTopic = localStorage.getItem('mqttTopic');
-            const mqttStatusTopic = localStorage.getItem('mqttStatusTopic');
 
             if (mqttBroker) document.getElementById('mqtt-broker').value = mqttBroker;
-            if (mqttUsername) document.getElementById('mqtt-username').value = mqttUsername;
-            if (mqttPassword) document.getElementById('mqtt-password').value = mqttPassword;
-            if (mqttClientId) document.getElementById('mqtt-client-id').value = mqttClientId;
             if (mqttTopic) document.getElementById('mqtt-topic').value = mqttTopic;
         }
 
@@ -431,22 +421,28 @@
             }
         }
 
-        // Save MQTT settings
+        // Save MQTT settings and send to server
         document.getElementById('save-mqtt').addEventListener('click', function() {
             const mqttBroker = document.getElementById('mqtt-broker').value;
-            const mqttUsername = document.getElementById('mqtt-username').value;
-            const mqttPassword = document.getElementById('mqtt-password').value;
-            const mqttClientId = document.getElementById('mqtt-client-id').value;
             const mqttTopic = document.getElementById('mqtt-topic').value;
 
+            // Save to localStorage
             localStorage.setItem('mqttBroker', mqttBroker);
-            localStorage.setItem('mqttUsername', mqttUsername);
-            localStorage.setItem('mqttPassword', mqttPassword);
-            localStorage.setItem('mqttClientId', mqttClientId);
             localStorage.setItem('mqttTopic', mqttTopic);
-            localStorage.setItem('mqttStatusTopic', mqttStatusTopic);
 
-            alert('MQTT settings saved successfully!');
+            // Send to server via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'mqtt-settings',
+                    settings: {
+                        broker: mqttBroker,
+                        topic: mqttTopic
+                    }
+                }));
+                alert('MQTT settings saved and sent to server!');
+            } else {
+                alert('MQTT settings saved locally, but could not send to server (WebSocket not connected)');
+            }
         });
 
         // Test MQTT connection
@@ -456,40 +452,67 @@
             testStatus.textContent = 'Testing MQTT connection...';
             testStatus.className = 'test-status';
 
-            // Simulate connection test (replace with actual MQTT test)
-            setTimeout(() => {
-                // This is a simulation - replace with actual MQTT connection test
-                const broker = document.getElementById('mqtt-broker').value;
-                if (broker && broker.includes('mqtt://')) {
-                    testStatus.textContent = 'MQTT connection successful!';
-                    testStatus.className = 'test-status test-success';
-                } else {
-                    testStatus.textContent = 'MQTT connection failed. Please check your settings.';
-                    testStatus.className = 'test-status test-error';
-                }
-            }, 1500);
+            // Send test request to server
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'test-mqtt-connection',
+                    settings: {
+                        broker: document.getElementById('mqtt-broker').value
+                    }
+                }));
+            } else {
+                testStatus.textContent = 'Cannot test MQTT: WebSocket not connected';
+                testStatus.className = 'test-status test-error';
+            }
         });
 
-        // Save video settings
+        // Save video settings and send to server
         document.getElementById('save-video').addEventListener('click', function() {
-            const videoDevice = document.getElementById('video-device').value;
-            const customVideoDevice = document.getElementById('custom-video-device').value;
-
-            localStorage.setItem('videoDevice', videoDevice);
+            let videoDevice = document.getElementById('video-device').value;
+            
+            // If custom device is selected, use the custom value
             if (videoDevice === 'custom') {
-                localStorage.setItem('customVideoDevice', customVideoDevice);
+                videoDevice = document.getElementById('custom-video-device').value;
             }
 
-            alert('Video settings saved successfully!');
+            // Save to localStorage
+            localStorage.setItem('videoDevice', document.getElementById('video-device').value);
+            if (document.getElementById('video-device').value === 'custom') {
+                localStorage.setItem('customVideoDevice', videoDevice);
+            }
+
+            // Send to server via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'video-settings',
+                    settings: {
+                        videoDevice: videoDevice
+                    }
+                }));
+                alert('Video settings saved and sent to server!');
+            } else {
+                alert('Video settings saved locally, but could not send to server (WebSocket not connected)');
+            }
         });
 
         // Reset video settings to defaults
         document.getElementById('reset-video').addEventListener('click', function() {
             if (confirm('Are you sure you want to reset video settings to defaults?')) {
                 document.getElementById('video-device').value = '/dev/video4';
+                document.getElementById('custom-device-group').style.display = 'none';
                 
                 localStorage.removeItem('videoDevice');
                 localStorage.removeItem('customVideoDevice');
+                
+                // Send reset to server
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'video-settings',
+                        settings: {
+                            videoDevice: '/dev/video4'
+                        }
+                    }));
+                }
                 
                 alert('Video settings reset to defaults!');
             }
@@ -517,17 +540,32 @@
             ws.onopen = () => {
                 console.log('WebSocket connected');
                 updateStatus('Connected - Starting WebRTC...', true);
+                
+                // Send current settings to server when connection is established
+                sendCurrentSettingsToServer();
+                
                 startWebRTC();
             };
 
             ws.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
-                console.log('Received:', data.type);
+                console.log('Received:', data);
 
                 if (data.type === 'sdp-offer') {
                     await handleOffer(data.sdp);
                 } else if (data.type === 'ice-candidate') {
                     await handleIceCandidate(data);
+                } else if (data.type === 'mqtt-test-result') {
+                    // Handle MQTT test result from server
+                    const testStatus = document.getElementById('mqtt-test-status');
+                    testStatus.style.display = 'block';
+                    if (data.success) {
+                        testStatus.textContent = 'MQTT connection successful!';
+                        testStatus.className = 'test-status test-success';
+                    } else {
+                        testStatus.textContent = `MQTT connection failed: ${data.message}`;
+                        testStatus.className = 'test-status test-error';
+                    }
                 }
             };
 
@@ -545,6 +583,40 @@
                 console.error('WebSocket error:', error);
                 updateStatus('Connection error', false);
             };
+        }
+
+        // Send current settings to server when WebSocket connects
+        function sendCurrentSettingsToServer() {
+            // Send MQTT settings if they exist
+            const mqttBroker = localStorage.getItem('mqttBroker');
+            if (mqttBroker) {
+                ws.send(JSON.stringify({
+                    type: 'mqtt-settings',
+                    settings: {
+                        broker: mqttBroker,
+                        username: localStorage.getItem('mqttUsername'),
+                        password: localStorage.getItem('mqttPassword'),
+                        clientId: localStorage.getItem('mqttClientId'),
+                        topic: localStorage.getItem('mqttTopic')
+                    }
+                }));
+            }
+
+            // Send video settings if they exist
+            const videoDevice = localStorage.getItem('videoDevice');
+            if (videoDevice) {
+                let devicePath = videoDevice;
+                if (videoDevice === 'custom') {
+                    devicePath = localStorage.getItem('customVideoDevice') || '/dev/video4';
+                }
+                
+                ws.send(JSON.stringify({
+                    type: 'video-settings',
+                    settings: {
+                        videoDevice: devicePath
+                    }
+                }));
+            }
         }
 
         async function startWebRTC() {

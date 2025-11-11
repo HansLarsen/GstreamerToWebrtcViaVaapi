@@ -45,8 +45,6 @@ class WebServer:
         asyncio.get_event_loop().create_task(self.start())
 
         self._mqtt_client = mqtt.Client()
-        self._mqtt_client.connect("192.168.1.166", 1883, 60)
-        self._mqtt_client.loop_start()
 
         self._update_thread = threading.Thread(target=self.update_controls_thread)
         self._update_thread.daemon = True
@@ -94,8 +92,26 @@ class WebServer:
                         elif data.get('input') == 'turn':
                             turn = data.get('value', 0.0)
                             self._turn = turn
-
                         self._last_time = time.time()
+                    elif data.get('type') == 'test-mqtt-connection':
+                        try:
+                            self._mqtt_client.connect(data.get('settings').get('broker'), 1883, 60)
+                            self._mqtt_client.loop_start()
+                            print("Connected to: ", data.get('settings').get('broker'))
+                            await ws.send_str(
+                                json.dumps({
+                                    "type": "mqtt-test-result",
+                                    "success": True
+                                })
+                            )
+                        except Exception as e:
+                            print("Failed to connect to: ", data.get('settings').get('broker'))
+                            await ws.send_str(
+                                json.dumps({
+                                    "type": "mqtt-test-result",
+                                    "success": False
+                                })
+                            )
                     else:
                         # Forward message to camera for processing
                         await self._camera.handle_client_message(ws, data)
