@@ -6,12 +6,69 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
+            padding: 0;
         }
 
-        video {
-            border: 1px solid #ccc;
-            max-width: 100%;
+        .topbar {
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .topbar-nav {
+            display: flex;
+            gap: 10px;
+        }
+
+        .topbar-nav button {
+            background-color: #444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .topbar-nav button.active {
+            background-color: #007bff;
+        }
+
+        .topbar-nav button:hover {
+            background-color: #555;
+        }
+
+        .view-container {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        .split-view {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .split-view .view-section {
+            flex: 1;
+            min-width: 300px;
         }
 
         .status {
@@ -28,6 +85,11 @@
         .disconnected {
             background: #f8d7da;
             color: #721c24;
+        }
+
+        video {
+            border: 1px solid #ccc;
+            max-width: 100%;
         }
 
         #controls-menu {
@@ -60,69 +122,131 @@
             width: 50%;
             position: absolute;
         }
+
+        .joystick-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .joystick-section {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 
 <body>
-    <h1>WebRTC Camera Stream</h1>
-    <div id="status" class="status disconnected">Disconnected</div>
-    <video id="video" autoplay playsinline controls muted></video>
-
-    <div>
-        <label>Map speed -1 and 1 to 0 and 1: </label>
-        <input type="checkbox" id="speed-map" name="speed map" />
-    </div>
-    <select id="reverse-button">
-        <option value="0">Button 0</option>
-        <option value="1">Button 1</option>
-        <option value="2">Button 2</option>
-        <option value="3">Button 3</option>
-    </select>
-
-    <div id="controls-menu">
-        <h2>Control Bindings</h2>
-        <label for="speed-axis">Speed Axis:</label>
-        <select id="speed-axis">
-            <option value="0">Axis 0</option>
-            <option value="1">Axis 1</option>
-            <option value="2">Axis 2</option>
-            <option value="3">Axis 3</option>
-        </select>
-        <label for="speed-invert">Invert Speed Axis:</label>
-        <input type="checkbox" id="speed-invert" name="speed invert" checked />
-
-        <label for="turn-axis">Turn Axis:</label>
-        <select id="turn-axis">
-            <option value="0">Axis 0</option>
-            <option value="1">Axis 1</option>
-            <option value="2">Axis 2</option>
-            <option value="3">Axis 3</option>
-        </select>
-        <label for="turn-invert">Invert Turn Axis:</label>
-        <input type="checkbox" id="turn-invert" name="turn invert" checked />
-    </div>
-
-    <div id="axis-visualization">
-        <h2>Axis Visualization</h2>
-        <div>
-            <label for="speed-bar">Speed Axis Value:</label>
-            <div id="speed-bar" class="bar-container">
-                <div id="speed-bar-fill" class="bar-fill" style="background: #4caf50;">
-                </div>
-            </div>
+    <div class="topbar">
+        <h1>Robot Controller</h1>
+        <div class="topbar-nav">
+            <button id="stream-tab" class="active">Stream</button>
+            <button id="joystick-tab">Joystick</button>
         </div>
-        <div>
-            <label for="turn-bar">Turn Axis Value:</label>
-            <div id="turn-bar" class="bar-container">
-                <div id="turn-bar-fill" class="bar-fill" style="background: #2196f3;">
+    </div>
+
+    <div class="view-container">
+        <!-- Stream View -->
+        <div id="stream-view" class="view active">
+            <h2>Camera Stream</h2>
+            <div id="status" class="status disconnected">Disconnected</div>
+            <video id="video" autoplay playsinline controls muted></video>
+        </div>
+
+        <!-- Joystick View -->
+        <div id="joystick-view" class="view">
+            <h2>Joystick Controls</h2>
+            <div class="split-view">
+                <div class="view-section">
+                    <div class="joystick-container">
+                        <div class="joystick-section">
+                            <h3>Control Configuration</h3>
+                            <div>
+                                <label>Map speed -1 and 1 to 0 and 1: </label>
+                                <input type="checkbox" id="speed-map" name="speed map" />
+                            </div>
+                            <select id="reverse-button">
+                                <option value="0">Button 0</option>
+                                <option value="1">Button 1</option>
+                                <option value="2">Button 2</option>
+                                <option value="3">Button 3</option>
+                            </select>
+
+                            <div id="controls-menu">
+                                <h4>Control Bindings</h4>
+                                <label for="speed-axis">Speed Axis:</label>
+                                <select id="speed-axis">
+                                    <option value="0">Axis 0</option>
+                                    <option value="1">Axis 1</option>
+                                    <option value="2">Axis 2</option>
+                                    <option value="3">Axis 3</option>
+                                </select>
+                                <label for="speed-invert">Invert Speed Axis:</label>
+                                <input type="checkbox" id="speed-invert" name="speed invert" checked />
+
+                                <label for="turn-axis">Turn Axis:</label>
+                                <select id="turn-axis">
+                                    <option value="0">Axis 0</option>
+                                    <option value="1">Axis 1</option>
+                                    <option value="2">Axis 2</option>
+                                    <option value="3">Axis 3</option>
+                                </select>
+                                <label for="turn-invert">Invert Turn Axis:</label>
+                                <input type="checkbox" id="turn-invert" name="turn invert" checked />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="view-section">
+                    <div class="joystick-container">
+                        <div class="joystick-section">
+                            <h3>Axis Visualization</h3>
+                            <div>
+                                <label for="speed-bar">Speed Axis Value:</label>
+                                <div id="speed-bar" class="bar-container">
+                                    <div id="speed-bar-fill" class="bar-fill" style="background: #4caf50;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="turn-bar">Turn Axis Value:</label>
+                                <div id="turn-bar" class="bar-container">
+                                    <div id="turn-bar-fill" class="bar-fill" style="background: #2196f3;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="joystick-section">
+                            <h3>Gamepad Status</h3>
+                            <div id="gamepad-status" class="status disconnected">No gamepad connected</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // View switching functionality
+        document.getElementById('stream-tab').addEventListener('click', () => {
+            document.getElementById('stream-view').classList.add('active');
+            document.getElementById('joystick-view').classList.remove('active');
+            document.getElementById('stream-tab').classList.add('active');
+            document.getElementById('joystick-tab').classList.remove('active');
+        });
+
+        document.getElementById('joystick-tab').addEventListener('click', () => {
+            document.getElementById('joystick-view').classList.add('active');
+            document.getElementById('stream-view').classList.remove('active');
+            document.getElementById('joystick-tab').classList.add('active');
+            document.getElementById('stream-tab').classList.remove('active');
+        });
+
+        // Your existing WebRTC and gamepad code
         const video = document.getElementById('video');
         const statusDiv = document.getElementById('status');
+        const gamepadStatusDiv = document.getElementById('gamepad-status');
         let pc = null;
         let ws = null;
 
@@ -259,14 +383,16 @@
         window.addEventListener("gamepadconnected", (event) => {
             const gamepad = event.gamepad;
             console.log(`Gamepad ${gamepad.id} connected.`);
-            updateStatus(`Gamepad ${gamepad.id} connected.`, true); // Use your existing status function
+            gamepadStatusDiv.textContent = `Gamepad ${gamepad.id} connected`;
+            gamepadStatusDiv.className = 'status connected';
         });
 
         // Listen for gamepad disconnection
         window.addEventListener("gamepaddisconnected", (event) => {
             const gamepad = event.gamepad;
             console.log(`Gamepad ${gamepad.id} disconnected.`);
-            updateStatus('Gamepad disconnected.', false);
+            gamepadStatusDiv.textContent = 'Gamepad disconnected';
+            gamepadStatusDiv.className = 'status disconnected';
         });
 
         let gamepadState = {};
@@ -277,9 +403,9 @@
         window.addEventListener('load', () => {
             const savedSpeedAxis = localStorage.getItem('speedAxis');
             const savedTurnAxis = localStorage.getItem('turnAxis');
-            const invertedSpeedAxis = document.getElementById('invertedSpeedAxis');
-            const invertedTurnAxis = document.getElementById('invertedTurnAxis');
-            const reverseButton = document.getElementById('reverseButton');
+            const invertedSpeedAxis = document.getElementById('speed-invert');
+            const invertedTurnAxis = document.getElementById('turn-invert');
+            const reverseButton = document.getElementById('reverse-button');
             const mappedSpeed = localStorage.getItem('mappedSpeed');
 
             if (savedSpeedAxis !== null) {
