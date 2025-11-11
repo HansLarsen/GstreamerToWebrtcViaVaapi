@@ -34,11 +34,11 @@ class GStreamerCamera:
             "video/x-raw,width=640,height=480,framerate=60/1 ! "
             "videoconvert ! "
             "queue max-size-buffers=2 ! "
-            "vaapih264enc max-qp=26 tune=none ! "
+            "vaapih264enc max-qp=26 tune=none keyframe-period=1  rate-control=cbr ! "
             "queue max-size-buffers=2 ! "
             "rtph264pay config-interval=0 aggregate-mode=zero-latency ! "  # or 'rtpvp8pay' for VP8
             "application/x-rtp,media=video,encoding-name=H264,payload=96 ! " # or VP8
-            "webrtcbin name=webrtcbin latency=1 bundle-policy=max-bundle stun-server=stun://stun.l.google.com:19302"
+            "webrtcbin name=webrtcbin latency=1 stun-server=stun://stun.l.google.com:19302"
         )
 
         # Create and store pipeline

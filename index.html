@@ -192,6 +192,7 @@
             pc.ontrack = (event) => {
                 console.log('Received WebRTC track');
                 video.srcObject = event.streams[0];
+                event.receiver.jitterBufferTarget = 1
                 updateStatus('Connected - Streaming', true);
             };
 
