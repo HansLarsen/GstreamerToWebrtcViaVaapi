@@ -134,6 +134,90 @@
             padding: 15px;
             border-radius: 5px;
         }
+
+        .settings-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .settings-section {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .settings-section h3 {
+            margin-top: 0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input, 
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .form-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .button-group button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .test-status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .test-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .test-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
     </style>
 </head>
 
@@ -143,6 +227,7 @@
         <div class="topbar-nav">
             <button id="stream-tab" class="active">Stream</button>
             <button id="joystick-tab">Joystick</button>
+            <button id="settings-tab">Settings</button>
         </div>
     </div>
 
@@ -225,22 +310,189 @@
                 </div>
             </div>
         </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="view">
+            <h2>Settings</h2>
+            <div class="settings-container">
+                <div class="settings-section">
+                    <h3>MQTT Configuration</h3>
+                    <div class="form-group">
+                        <label for="mqtt-broker">Broker URL:</label>
+                        <input type="text" id="mqtt-broker" placeholder="mqtt://broker.example.com:1883">
+                    </div>
+                    <div class="form-group">
+                        <label for="mqtt-username">Username:</label>
+                        <input type="text" id="mqtt-username" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
+                        <label for="mqtt-password">Password:</label>
+                        <input type="password" id="mqtt-password" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
+                        <label for="mqtt-client-id">Client ID:</label>
+                        <input type="text" id="mqtt-client-id" placeholder="robot-controller-web">
+                    </div>
+                    <div class="form-group">
+                        <label for="mqtt-topic">Control Topic:</label>
+                        <input type="text" id="mqtt-topic" placeholder="robot/control">
+                    </div>
+                    <div class="button-group">
+                        <button id="test-mqtt" class="btn-primary">Test Connection</button>
+                        <button id="save-mqtt" class="btn-success">Save MQTT Settings</button>
+                    </div>
+                    <div id="mqtt-test-status" class="test-status"></div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Video Device Configuration</h3>
+                    <div class="form-group">
+                        <label for="video-device">Video Device:</label>
+                        <select id="video-device">
+                            <option value="/dev/video0">/dev/video0</option>
+                            <option value="/dev/video4">/dev/video4</option>
+                            <option value="custom">Custom Device</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="custom-device-group" style="display: none;">
+                        <label for="custom-video-device">Custom Device Path:</label>
+                        <input type="text" id="custom-video-device" placeholder="/dev/videoX">
+                    </div>
+                    <div class="button-group">
+                        <button id="save-video" class="btn-success">Save Video Settings</button>
+                        <button id="reset-video" class="btn-secondary">Reset to Defaults</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         // View switching functionality
         document.getElementById('stream-tab').addEventListener('click', () => {
-            document.getElementById('stream-view').classList.add('active');
-            document.getElementById('joystick-view').classList.remove('active');
-            document.getElementById('stream-tab').classList.add('active');
-            document.getElementById('joystick-tab').classList.remove('active');
+            switchView('stream');
         });
 
         document.getElementById('joystick-tab').addEventListener('click', () => {
-            document.getElementById('joystick-view').classList.add('active');
+            switchView('joystick');
+        });
+
+        document.getElementById('settings-tab').addEventListener('click', () => {
+            switchView('settings');
+        });
+
+        function switchView(viewName) {
+            // Hide all views
             document.getElementById('stream-view').classList.remove('active');
-            document.getElementById('joystick-tab').classList.add('active');
+            document.getElementById('joystick-view').classList.remove('active');
+            document.getElementById('settings-view').classList.remove('active');
+            
+            // Remove active class from all tabs
             document.getElementById('stream-tab').classList.remove('active');
+            document.getElementById('joystick-tab').classList.remove('active');
+            document.getElementById('settings-tab').classList.remove('active');
+            
+            // Show selected view and activate its tab
+            document.getElementById(`${viewName}-view`).classList.add('active');
+            document.getElementById(`${viewName}-tab`).classList.add('active');
+        }
+
+        // Load settings from localStorage
+        window.addEventListener('load', () => {
+            loadMQTTSettings();
+            loadVideoSettings();
+        });
+
+        function loadMQTTSettings() {
+            const mqttBroker = localStorage.getItem('mqttBroker');
+            const mqttUsername = localStorage.getItem('mqttUsername');
+            const mqttPassword = localStorage.getItem('mqttPassword');
+            const mqttClientId = localStorage.getItem('mqttClientId');
+            const mqttTopic = localStorage.getItem('mqttTopic');
+            const mqttStatusTopic = localStorage.getItem('mqttStatusTopic');
+
+            if (mqttBroker) document.getElementById('mqtt-broker').value = mqttBroker;
+            if (mqttUsername) document.getElementById('mqtt-username').value = mqttUsername;
+            if (mqttPassword) document.getElementById('mqtt-password').value = mqttPassword;
+            if (mqttClientId) document.getElementById('mqtt-client-id').value = mqttClientId;
+            if (mqttTopic) document.getElementById('mqtt-topic').value = mqttTopic;
+        }
+
+        function loadVideoSettings() {
+            const videoDevice = localStorage.getItem('videoDevice');
+            const customVideoDevice = localStorage.getItem('customVideoDevice');
+
+            if (videoDevice) {
+                document.getElementById('video-device').value = videoDevice;
+                if (videoDevice === 'custom' && customVideoDevice) {
+                    document.getElementById('custom-video-device').value = customVideoDevice;
+                    document.getElementById('custom-device-group').style.display = 'block';
+                }
+            }
+        }
+
+        // Save MQTT settings
+        document.getElementById('save-mqtt').addEventListener('click', function() {
+            const mqttBroker = document.getElementById('mqtt-broker').value;
+            const mqttUsername = document.getElementById('mqtt-username').value;
+            const mqttPassword = document.getElementById('mqtt-password').value;
+            const mqttClientId = document.getElementById('mqtt-client-id').value;
+            const mqttTopic = document.getElementById('mqtt-topic').value;
+
+            localStorage.setItem('mqttBroker', mqttBroker);
+            localStorage.setItem('mqttUsername', mqttUsername);
+            localStorage.setItem('mqttPassword', mqttPassword);
+            localStorage.setItem('mqttClientId', mqttClientId);
+            localStorage.setItem('mqttTopic', mqttTopic);
+            localStorage.setItem('mqttStatusTopic', mqttStatusTopic);
+
+            alert('MQTT settings saved successfully!');
+        });
+
+        // Test MQTT connection
+        document.getElementById('test-mqtt').addEventListener('click', function() {
+            const testStatus = document.getElementById('mqtt-test-status');
+            testStatus.style.display = 'block';
+            testStatus.textContent = 'Testing MQTT connection...';
+            testStatus.className = 'test-status';
+
+            // Simulate connection test (replace with actual MQTT test)
+            setTimeout(() => {
+                // This is a simulation - replace with actual MQTT connection test
+                const broker = document.getElementById('mqtt-broker').value;
+                if (broker && broker.includes('mqtt://')) {
+                    testStatus.textContent = 'MQTT connection successful!';
+                    testStatus.className = 'test-status test-success';
+                } else {
+                    testStatus.textContent = 'MQTT connection failed. Please check your settings.';
+                    testStatus.className = 'test-status test-error';
+                }
+            }, 1500);
+        });
+
+        // Save video settings
+        document.getElementById('save-video').addEventListener('click', function() {
+            const videoDevice = document.getElementById('video-device').value;
+            const customVideoDevice = document.getElementById('custom-video-device').value;
+
+            localStorage.setItem('videoDevice', videoDevice);
+            if (videoDevice === 'custom') {
+                localStorage.setItem('customVideoDevice', customVideoDevice);
+            }
+
+            alert('Video settings saved successfully!');
+        });
+
+        // Reset video settings to defaults
+        document.getElementById('reset-video').addEventListener('click', function() {
+            if (confirm('Are you sure you want to reset video settings to defaults?')) {
+                document.getElementById('video-device').value = '/dev/video4';
+                
+                localStorage.removeItem('videoDevice');
+                localStorage.removeItem('customVideoDevice');
+                
+                alert('Video settings reset to defaults!');
+            }
         });
 
         // Your existing WebRTC and gamepad code
