@@ -28,14 +28,13 @@ class GStreamerCamera:
         """Set the WebSocket manager to send messages to clients"""
         self._websocket_manager = manager
         
-    def create_pipeline(self, device="/dev/video0"):
+    def create_pipeline(self, device="/dev/video4"):
         pipeline_str = (
             f"v4l2src device={device} ! "
-            "video/x-raw,width=640,height=480,framerate=30/1 ! "
+            "video/x-raw,width=640,height=480,framerate=60/1 ! "
             "videoconvert ! "
-            "video/x-raw,format=I420 ! "
             "queue max-size-buffers=1 ! "
-            "x264enc pass=qual quantizer=26 tune=zerolatency ! "
+            "vaapih264enc max-qp=26 tune=none ! "
             "rtph264pay config-interval=0 aggregate-mode=zero-latency ! "  # or 'rtpvp8pay' for VP8
             "application/x-rtp,media=video,encoding-name=H264,payload=96 ! " # or VP8
             "webrtcbin name=webrtcbin latency=1 bundle-policy=max-bundle stun-server=stun://stun.l.google.com:19302"
