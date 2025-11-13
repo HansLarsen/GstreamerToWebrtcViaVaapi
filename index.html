@@ -640,7 +640,7 @@
             pc.ontrack = (event) => {
                 console.log('Received WebRTC track');
                 video.srcObject = event.streams[0];
-                event.receiver.jitterBufferTarget = 0
+                event.receiver.jitterBufferTarget = 1
                 updateStatus('Connected - Streaming', true);
             };
 
@@ -802,6 +802,18 @@
             barFillElement.style.width = `${percentage}%`;
         }
 
+        // Example: Monitoring jitter buffer health
+        async function monitorJitterBuffer(rtcPeerConnection) {
+            const stats = await rtcPeerConnection.getStats();
+            stats.forEach(report => {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                console.log('Jitter buffer delay (seconds):', report.jitterBufferMinimumDelay);
+                console.log('Emitted count:', report.jitterBufferEmittedCount);
+                
+                }
+            });
+        }
+
         function checkGamepads() {
             // Get the current list of gamepads
             const gamepads = navigator.getGamepads();
@@ -856,6 +868,10 @@
                         }
                     }
                 }
+            }
+
+            if (pc) {
+                monitorJitterBuffer(pc)
             }
 
             // Continue the loop
