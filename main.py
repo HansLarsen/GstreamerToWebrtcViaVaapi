@@ -19,6 +19,7 @@ class WebServer:
     _forward = 0.0
     _turn = 0.0
     _last_time = time.time()
+    _topic = "capra/robot/remote/wheel_in"
 
     def __init__(self):
         self._app = web.Application()
@@ -56,8 +57,8 @@ class WebServer:
                 self._forward = 0.0
                 self._turn = 0.0
 
-            control_msg = {"forward": self._forward, "turn": self._turn}
-            self._mqtt_client.publish("capra/robot/remote/robot/control", json.dumps(control_msg))
+            control_msg = { "linear": { "x": self._forward }, "angular": { "z": self._turn } }
+            self._mqtt_client.publish(self._topic, json.dumps(control_msg))
             time.sleep(0.05)
 
     async def start(self):
@@ -98,6 +99,7 @@ class WebServer:
                             self._mqtt_client.connect(data.get('settings').get('broker'), 1883, 60)
                             self._mqtt_client.loop_start()
                             print("Connected to: ", data.get('settings').get('broker'))
+                            self._topic = data.get('settings').get('topic')
                             await ws.send_str(
                                 json.dumps({
                                     "type": "mqtt-test-result",
