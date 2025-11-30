@@ -3,15 +3,17 @@ gi.require_version('Gst', '1.0')
 gi.require_version('GstWebRTC', '1.0')
 gi.require_version('GstSdp', '1.0')
 gi.require_version("GstRtspServer", "1.0")
+gi.require_version('GstApp', '1.0')
 from gi.repository import Gst, GstWebRTC, GstSdp, GLib, GstRtspServer
 import json
 import asyncio
 import logging
 import os
+from library.oak_camera import OakCamera
+import traceback
 
 class GStreamerCamera:
     def __init__(self):
-        Gst.init(None)
         self.pipeline = None
         self.webrtcbin = None
         self.server = GstRtspServer.RTSPServer.new()
@@ -23,26 +25,53 @@ class GStreamerCamera:
         self._pending_offer = None
         self._pending_ice_candidates = []
         self._is_offer_ready = False
+        self._camera = OakCamera(self.on_camera_data)
+        self._appsrc = None
+        self._pipeline_started = False
+        
+    def on_camera_data(self, data):
+        if not self._pipeline_started:
+            print("Pipeline not started")
+            return
+
+        buffer = Gst.Buffer.new_wrapped(data.tobytes())
+        self._appsrc.emit("push-buffer", buffer)
         
     def set_websocket_manager(self, manager):
         """Set the WebSocket manager to send messages to clients"""
         self._websocket_manager = manager
         
-    def create_pipeline(self, device="/dev/video4"):
+    def create_pipeline(self):
+        print("Starting GStreamer")
+        Gst.init()
+        
         pipeline_str = (
-            f"v4l2src device={device} ! "
-            "video/x-raw,width=640,height=480,framerate=60/1 ! "
-            "videoconvert ! "
-            "queue max-size-buffers=2 ! "
-            "vaapih264enc max-qp=26 tune=none keyframe-period=1 quality-level=7 rate-control=cbr ! "
+            f"appsrc name=source format=time is-live=true do-timestamp=true "
+            f"caps=video/x-h264,stream-format=byte-stream,alignment=au,width={self._camera.Width_},height={self._camera.Height_},framerate={self._camera.FPS_}/1 ! "
+            "h264parse ! "
             "queue max-size-buffers=2 ! "
             "rtph264pay config-interval=0 aggregate-mode=zero-latency ! "  # or 'rtpvp8pay' for VP8
             "application/x-rtp,media=video,encoding-name=H264,payload=96 ! " # or VP8
             "webrtcbin name=webrtcbin latency=1 stun-server=stun://stun.l.google.com:19302"
         )
 
+        print("Setting up the pipeline")
         # Create and store pipeline
         self.pipeline = Gst.parse_launch(pipeline_str)
+        print("Pipeline created, setting up the source")
+        
+        # Get the appsrc element
+        self._appsrc = self.pipeline.get_by_name("source")
+        
+        # Configure appsrc properties
+        self._appsrc.set_property("block", False)  # Block when queue is full
+        self._appsrc.set_property("max-bytes", 100000)  # 500KB buffer
+        self._appsrc.set_property("min-percent", 50)  # Start blocking at 50% full
+
+        self._appsrc.set_property("min-latency", -1)  # In nanoseconds. 1 ns is a very low value.
+        self._appsrc.set_property("max-latency", 1)  # In nanoseconds.
+
+        print("Sources set up, create webrtcbin")
         self.webrtcbin = self.pipeline.get_by_name("webrtcbin")
 
         # Connect signals
@@ -53,24 +82,9 @@ class GStreamerCamera:
         # Start the pipeline
         self.pipeline.set_state(Gst.State.PLAYING)
         print("GStreamer pipeline created and playing.")
-        self.add_latency_probes()
-
-    def add_latency_probes(self):
-        # Add probe to measure buffer timestamps
-        def on_buffer_probe(pad, info):
-            buffer = info.get_buffer()
-            if buffer:
-                timestamp = buffer.pts
-                current_time = Gst.util_get_timestamp()
-                latency = (current_time - timestamp) / Gst.MSECOND
-                print(f"Pipeline latency: {latency:.2f}ms")
-            return Gst.PadProbeReturn.OK
         
-        # Add probe to the vp8enc element
-        vp8enc = self.pipeline.get_by_name("vp8enc")
-        if vp8enc:
-            sinkpad = vp8enc.get_static_pad("sink")
-            sinkpad.add_probe(Gst.PadProbeType.BUFFER, on_buffer_probe)
+        self._pipeline_started = True
+        self._camera.start()
 
     def on_connection_state_change(self, webrtcbin, pspec):
         state = webrtcbin.get_property("connection-state")
